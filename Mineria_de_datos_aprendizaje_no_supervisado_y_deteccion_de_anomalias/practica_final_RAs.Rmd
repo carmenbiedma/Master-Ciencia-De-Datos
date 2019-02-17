@@ -1,0 +1,253 @@
+---
+title: 'Minería de datos: aprendizaje no supervisado y detección de anomalías: 
+Práctica Final Reglas de Asociación'
+author: "Carmen Biedma Rodriguez"
+date: "12 de febrero de 2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("C:/Users/Carmen Biedma/Desktop/Master/Mineria_datos_no_supervisado_y_deteccion_de_anomalias/Practica_final")
+library(arulesViz)
+library(arules)
+library(mlbench)
+library(ggplot2)
+```
+
+#Análisis de los datos y preprocesamiento
+
+Para este proyecto se ha utilizado el dataset Wisconsin Breast Cancer. Es un dataset que se utiliza para categorizar células en cancerígenas o no, en base a ciertas caracteristicas de las mismas. 
+
+En primer lugar leeremos los datos y veremos un poco su estructura para determinar el preprocesamiento que realizaremos previo a la generación de las reglas. 
+
+
+
+```{r}
+wbc <- read.csv("wisc_bc_data.csv")
+str(wbc)
+```
+
+Como podemos observar, tenemos un dataset formado por 569 instancias y 32 variables, de las cuales 30 son descriptivas, una es de clase y un identificador.
+
+Antes de comenzar con la generación de reglas tenemos que tener claro que los algoritmos de reglas de asociación como Apriori no trabajan con variables numéricas, por lo que tendremos que convertirlas en categóricas para poder utilizarlas. Además, hay ciertas variables, como el identificador, que no van a aportar nada a nuestros modelos ya que es imposible identificar patrones para algun conjunto de instancias si la variable es única para cada una de ellas. Otra de las cosas importantes a tener en cuenta a la hora de usar mecanismos de reglas de asociación es la estructura en la que están almacenados los datos. En este caso tenemos una estructura tabular que tendremos que modificar ya que necesitaremos que los datos estén en forma tabular.
+
+```{r,include = FALSE}
+wbc <- wbc[,2:12]
+```
+
+En primer lugar vamos a transformar las variables reales en categóricas. Dado el propósito del proyecto, sólo tendré en cuenta las variables asociadas a la medida media ya que el estudio va a ser mucho más claro y se generarán muchas menos reglas para poder analizarlas detenidamente. Para realizar dicha tarea, se dividirán los dominios de las variables en 3 intervalos del mismo tamaño, etiquetados como "Low", "Medium" y "High" y asignando cada uno de los valores al intervalo que pertenecen. A continuación se muestra como sería el trozo de código que se utiliza para ello y que se aplica al resto de variables.
+
+```{r}
+minimo =  min(wbc$radius_mean)
+maximo = max(wbc$radius_mean)
+intervalo = (maximo - minimo) / 3
+wbc[["radius_mean"]] = ordered( 
+  cut( wbc[["radius_mean"]], c(minimo,minimo+intervalo,maximo-intervalo,maximo)), 
+  labels= c("Low", "Medium", "High"))
+
+```
+
+
+```{r,include=FALSE}
+
+
+minimo =  min(wbc$texture_mean)
+maximo = max(wbc$texture_mean)
+intervalo = (maximo - minimo) / 3
+wbc[["texture_mean"]] = ordered( 
+  cut( wbc[["texture_mean"]], c(minimo,minimo+intervalo,maximo-intervalo,maximo)), 
+  labels= c("Low", "Medium", "High"))
+
+minimo =  min(wbc$perimeter_mean)
+maximo = max(wbc$perimeter_mean)
+intervalo = (maximo - minimo) / 3
+wbc[["perimeter_mean"]] = ordered( 
+  cut( wbc[["perimeter_mean"]], c(minimo,minimo+intervalo,maximo-intervalo,maximo)), 
+  labels= c("Low", "Medium", "High"))
+
+minimo =  min(wbc$area_mean)
+maximo = max(wbc$area_mean)
+intervalo = (maximo - minimo) / 3
+wbc[["area_mean"]] = ordered( 
+  cut( wbc[["area_mean"]], c(minimo,minimo+intervalo,maximo-intervalo,maximo)), 
+  labels= c("Low", "Medium", "High"))
+
+minimo =  min(wbc$smoothness_mean)
+maximo = max(wbc$smoothness_mean)
+intervalo = (maximo - minimo) / 3
+wbc[["smoothness_mean"]] = ordered( 
+  cut( wbc[["smoothness_mean"]], c(minimo,minimo+intervalo,maximo-intervalo,maximo)), 
+  labels= c("Low", "Medium", "High"))
+
+minimo =  min(wbc$compactness_mean)
+maximo = max(wbc$compactness_mean)
+intervalo = (maximo - minimo) / 3
+wbc[["compactness_mean"]] = ordered( 
+  cut( wbc[["compactness_mean"]], c(minimo,minimo+intervalo,maximo-intervalo,maximo)), 
+  labels= c("Low", "Medium", "High"))
+
+minimo =  min(wbc$concavity_mean)
+maximo = max(wbc$concavity_mean)
+intervalo = (maximo - minimo) / 3
+wbc[["concavity_mean"]] = ordered( 
+  cut( wbc[["concavity_mean"]], c(minimo,minimo+intervalo,maximo-intervalo,maximo)), 
+  labels= c("Low", "Medium", "High"))
+
+minimo =  min(wbc$points_mean)
+maximo = max(wbc$points_mean)
+intervalo = (maximo - minimo) / 3
+wbc[["points_mean"]] = ordered( 
+  cut( wbc[["points_mean"]], c(minimo,minimo+intervalo,maximo-intervalo,maximo)), 
+  labels= c("Low", "Medium", "High"))
+
+minimo =  min(wbc$symmetry_mean)
+maximo = max(wbc$symmetry_mean)
+intervalo = (maximo - minimo) / 3
+wbc[["symmetry_mean"]] = ordered( 
+  cut( wbc[["symmetry_mean"]], c(minimo,minimo+intervalo,maximo-intervalo,maximo)), 
+  labels= c("Low", "Medium", "High"))
+
+minimo =  min(wbc$dimension_mean)
+maximo = max(wbc$dimension_mean)
+intervalo = (maximo - minimo) / 3
+wbc[["dimension_mean"]] = ordered( 
+  cut( wbc[["dimension_mean"]], c(minimo,minimo+intervalo,maximo-intervalo,maximo)), 
+  labels= c("Low", "Medium", "High"))
+```
+
+###Items negados
+
+Se utilizará la variable radius_mean para realizar los items negados. Para ello, en lugar de tener una variable llamada radius_mean, tendremos una variable booleana por cada uno de los levels que tengamos, siendo verdadera si pertenecen a dicho intervalo y falsa en caso contrario.
+
+```{r}
+wbc[["radius_mean_low"]] <- ifelse(wbc$radius_mean == "Low", TRUE,FALSE)
+wbc[["radius_mean_low"]] <- as.factor(wbc[["radius_mean_low"]])
+wbc[["radius_mean_medium"]] <-ifelse(wbc$radius_mean == "Medium", TRUE,FALSE)
+wbc[["radius_mean_medium"]] <- as.factor(wbc[["radius_mean_medium"]])
+wbc[["radius_mean_high"]] <- ifelse(wbc$radius_mean == "High", TRUE,FALSE)
+wbc[["radius_mean_high"]] <- as.factor(wbc[["radius_mean_high"]])
+wbc[["radius_mean"]]  = NULL
+```
+
+Como se ha dicho anteriormente, hay que transformar la estructura tabular del dataset en transacciones. Para ello se utilizará el siguiente fragmento de código.
+
+```{r}
+wbc_transactions<-as(wbc, "transactions")
+str(wbc_transactions)
+cat("Variables del dataset original: ",dim(wbc)[2],
+    " - Variables del dataset en forma de transacciones : ", ncol(wbc_transactions))
+```
+
+Vamos a hacer un primer análisis de los items que se han generado. Para ello veremos un gráfico de aquellos que son frecuentes dentro de nuestro dataset.
+
+```{r}
+itemFrequencyPlot(wbc_transactions, support = 0.1, cex.names=0.8)
+```
+
+Como vemos en el gráfico, la mayoría de itemsets frecuentes son aquellos para los que el valor de su medida es bajo, esto era de esperar ya que las medidas que se toman de las células son perjudiciales. Esto quiere decir que cuanto mayor sea su valor, mayor será la posibilidad de un diagnóstico maligno. Por tanto, al tener más casos de casos benignos, dichos valores predominarán frente a los altos. A continuación podemos ver la cantidad de casos benignos frente a los malignos que tenemos.
+
+```{r}
+table(wbc$diagnosis)
+```
+
+#Obtención de reglas
+
+Para generar las reglas se utiliza el algoritmo Apriori.
+
+```{r}
+wbc_rules <-apriori(wbc_transactions, parameter = list(support = 0.2, confidence = 0.8, minlen= 2))
+summary(wbc_rules)
+quality(head(wbc_rules))
+```
+
+Resumiendo un poco el resultado proporcionado por este algortimo, hemos obtenido un conjunto de 25709 reglas con un soporte y confianza mínimos de 0.2004 y 0.8 respectivamente (como se ha especificado a la hora de ejecutarlo). La media del soporte de las reglas es relativamente baja (0.2601), por lo que la mayoría de las reglas no se ajustan a una gran cantidad de transacciones. Con respecto a la confianza podemos ver que hay reglas con confianza 1, por lo que podremos sacar conclusiones de ellas con mucha veracidad. A esto último hay que darle un matiz ya que puede que la confianza sea 1 debido a que el soporte del consecuente sea muy alto, por lo que tendremos reglas que no servirán de mucho. Además, si vemos los valores de lift, tenemos como mínimo el valor 0.9081, por lo que tenemos reglas que tendrán una dependencia negativa.
+
+Muchas de las reglas que hemos obenido pueden ser redundantes, por lo que tendremos que eliminarlas. A continuación se muestra un fragmento de código que elimina dichas reglas. 
+
+```{r}
+subsetMatrix <- is.subset(wbc_rules,wbc_rules)
+subsetMatrix[lower.tri(subsetMatrix, diag=TRUE)] <- FALSE
+redundant <- colSums(subsetMatrix, na.rm=TRUE) >= 1
+rulesPruned <- wbc_rules[!redundant] # remove redundant rules
+inspect(head(rulesPruned))
+cat("Se ha reducido el número de reglas de ",length(wbc_rules), " a ",length(rulesPruned))
+```
+
+Ahora tenemos un conjunto de reglas mucho más pequeño, 92 en total. Éstas serán mucho más fáciles de analizar y resumirán todas las que nos salieron inicialmente.
+
+#Análisis de reglas obtenidas
+
+En esta sección vamos a analizar un poco las reglas que hemos obtenido de forma general. Para obtener unas primeras conclusiones lo más informativo es un gráfico que represente las reglas con sus correspondientes medidas.
+
+```{r}
+plot(rulesPruned)
+```
+
+En este gráfico tenemos las tres medidas representadas: en el eje X el soporte, en el Y la confianza y con una gama de colores se representa el Lift. En primera instancia, nos interesan las reglas que estén en una parte concreta del gráfico, delimitada por los valores de las medidas que queramos considerar como "buenos".
+
+Si hablamos de soporte, no hay un criterio formal definido acerca de cuáles son los valores que nos gustaría analizar. Como ya sabemos, el soporte de una regla representa las veces que aparecen en el dataset todos los items  de la regla, siendo valor 0 cuando no aparecen en ninguno y 1 cuando aparecen en todas. De ésta forma, si queremos sacar conclusiones acerca de cosas poco frecuentes en la base de datos, nos interesaremos por los que tengan un soporte cercano a 0 ya que serán las carácterísticas que no se dan en la mayoría de los casos. Por otro lado, las reglas con soporte muy próximo a 1 serán cosas evidentes que habrá que tener en cuenta o no dependiendo de las conclusiones que queramos sacar. En nuestro caso, queremos obtener reglas que nos aporten información sobre un conjunto de datos considerable, pero que no sean obvias, por lo que nos quedaremos con las reglas que se sitúen entre soporte 0.25 y 0.5 aproximadamente.
+
+Con respecto a la confianza, es una medida que puede dar lugar a confusión ya que no tiene en cuenta el soporte del consecuente y puede generar medidas de confianza muy altas porque el consecuente tenga un soporte altísimo, dando lugar a reglas muy obvias que no sirven para mucho. Por tanto, comprobaremos que la confianza 1 es real cuando tengamos un caso de este tipo y por lo demás no nos preocuparemos demasiado ya que al generar las propias reglas pusimos como condición que dicho valor fuese mayor a 0.8, que ya se considera una confianza buena como para tener la regla en cuenta.
+
+Además, tendremos muy en cuenta el Lift ya que es la medida que nos da la dependencia estadística de los items que forman la regla. Dicha medida, a diferencia de la confianza, tiene en cuenta el soporte del consecuente, por lo que podríamos resolver el problema de las reglas con confianza 1 mirando dicho valor. Las reglas que nos interesan desde la observación de ésta medida son aquellas que tengan un valor distinto de 1 ya que por definición, dicho valor de Lift representa independencia entre antecedente y consecuente.
+
+
+#Análisis del diagnóstico
+
+Dependiendo del dataset que elijamos, las conclusiones a sacar de las reglas son diferentes. En este caso, lo más interesante del dataset es la determinación del diagnóstico, por lo que en primer lugar veremos qué reglas tienen el diagnóstico en el consecuente. Vamos a observar primero las características relevantes de los diagnóstivos benignos.
+
+Es de esperar que, medidas bajas de las caracteristicas tomadas nos den un diagnóstico benigno,
+
+```{r}
+rulesBening <- subset(rulesPruned, subset = rhs %in% "diagnosis=B" & (lift > 1.05 | lift < 1.05))
+inspect(rulesBening)
+```
+
+Hay 5 reglas que cumplen la característica de tener diagnosis=B en el consecuente. Todas ellas vienen dadas por antecedentes que representan medidas bajas de cualidades en la célula. Como antes se dijo, se han medido características que aumentan el riesgo de cáncer a medida que son mayores, por lo que este resltado no es nada inesperado.
+
+Comentando un poco las medidas de calidad de las reglas obtenidas, concuerdan bastante con las que se han mencionado antes como interesantes. Los soportes están mas o menos entre 0.25 y 0.5y la confianza no llega a ser 1, que serían los valores problemáticos. Por otro lado los lift son mayores que 1 por lo que nos dice que todas tienen dependencia positiva.
+
+Vamos a ver si con valores grandes de dichos valores obtenemos un diagnóstico maligno, que sería lo esperado.
+
+```{r}
+rulesBening <- subset(rulesPruned, subset = rhs %in% "diagnosis=M" & (lift > 1.05 | lift < 1.05))
+inspect(rulesBening)
+```
+
+En este caso hemos obtenido solamente 3 reglas y se adaptan perfectamente a lo esperado. En ninguno de los antecedentes tenemos valores bajos de ninguna de las variables de estudio, por lo que cabe esperar que las mismas son del tipo que se pensaba (a más valor, más probabilidad de cáncer).
+
+La primera regla que nos sale en este subconjunto parece muy interesante debido a sus medidas de calidad. Sería interesante ver qué otras reglas hay interesantes con respecto a su antecedente. Si vemos la selección siguiente de reglas, podemos observar que hay una que nos dice que si el diagnóstico es benigno, la media de puntos va a ser baja, lo que refuerza que esta variable nos va a ser bastante importante a la hora de clasificar nuestros ejemplos ya que sabemos que al ser baja el diagnóstico será bueno pero en el momento que sea media o mayor será maligno. 
+
+```{r}
+rulesBening <- subset(rulesPruned, subset = lhs %in% "diagnosis=B" & (lift > 1.05 | lift < 1.05))
+inspect(rulesBening)
+```
+
+Con éste procedimiento, se realizan los clasificadores basados en reglas de asociación. El proceso sería más extenso que en este apartado pero para clasificar solo bastaría con escoger las reglas que determinen perfectamente un diagnóstico maligno o benigno y aplicarlo a los ejemplos que queramos clasificar.
+
+#Análisis de items negados
+
+Cuando añadimos items negados, hay que tener cuidado con las reglas que se generan ya que algunas de ellas pueden estar dando información obvia con una confianza muy alta, veamos si ordenando por confianza las reglas podemos ver alguna regla de este tipo.
+
+```{r}
+inspect(head(sort(rulesPruned, by="confidence")))
+```
+
+Efectivamente, se han generado las reglas que esperabamos. Está claro que si el radio medio pertenece al intervalo "medium", no va a pertenecer al intervalo "low".
+
+Otro aspecto interesante que se puede observar con las reglas obtenidas es que hay variables que están muy corrreladas. Ésto lo sabemos porque hay reglas del tipo perimeter_mean = Low -> area_mean = Low que tienen confianza 1 y además un lift positivo. No siempre que pase esto quiere decir que vayamos a tener dos variables muy correladas pero dadas las variables que tenemos, tiene mucho sentido que esten correladas ya que el area es proporcional al perímetro de la célula.
+
+Debido a la conclusión sacada en el párrafo anterior, deberíamos tener en cuenta la posibilidad de considerar solo una de dichas variables, porque no tiene sentido obtener reglas que asocien dicho tipo de variables.
+
+
+
+#Conclusiones finales
+
+Después de haber observado las reglas obtenidas, la conclusión más fuerte que se podría sacar es que todas las variables descriptivas son directamente proporcionales al diagnóstico malígno. Es decir, que a mayor valor de dichas variables, mayor es la posibilidad de que la instancia de declare como maligna.
+
+Otra de los aspectos importantes que se han observado es que hay que tener en cuenta las variables que están muy correladas, como pasaba con el perímetro y el área. La información que proporcionan dichas variables al final puede resultar del mismo tipo, por lo que tener ambas sólo nos proporcionará un conjunto de reglas más grande con información redundante.
+
+Además se ha visto que cuando añadimos items negados obtenemos muchas reglas que no dan información ninguna. Éstas son del tipo: radius_mean_low=TRUE => radius_mean_medium=FALSE. Es obvio que si pertenece a un rango de valores dentro del dominio de la variable, no va a pertenecer a otro diferente a la vez. 
+
+En resumen del trabajo realizado, se ha visto que este dataset con las variables seleccionadas restringe mucho el estudio, por lo que deberíamos de tener en cuenta todas las que contiene el dataset original y hacer un análisis exhaustivo de las mismas. Así, podríamos conseguir realizar un clasificador de calidad en base a las características medidas para cada una de las instancias.

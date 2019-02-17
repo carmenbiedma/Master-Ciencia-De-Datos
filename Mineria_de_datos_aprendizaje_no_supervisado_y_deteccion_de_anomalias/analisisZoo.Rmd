@@ -1,0 +1,187 @@
+---
+title: "Zoo Dataset"
+author: "Carmen Biedma Rodriguez"
+date: "20 de diciembre de 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(arulesViz)
+library(arules)
+library(mlbench)
+```
+
+```{r}
+data(Zoo)
+Zoo.original <- Zoo
+head(Zoo.original)
+```
+
+```{r}
+Zoo[["hair"]] <-as.factor(Zoo[["hair"]])
+Zoo[["feathers"]] <-as.factor(Zoo[["feathers"]])
+Zoo[["eggs"]] <-as.factor(Zoo[["eggs"]])
+Zoo[["milk"]] <-as.factor(Zoo[["milk"]])
+Zoo[["airborne"]] <-as.factor(Zoo[["airborne"]])
+Zoo[["aquatic"]] <-as.factor(Zoo[["aquatic"]])
+Zoo[["predator"]] <-as.factor(Zoo[["predator"]])
+Zoo[["toothed"]] <-as.factor(Zoo[["toothed"]])
+Zoo[["backbone"]] <-as.factor(Zoo[["backbone"]])
+Zoo[["breathes"]] <-as.factor(Zoo[["breathes"]])
+Zoo[["venomous"]] <-as.factor(Zoo[["venomous"]])
+Zoo[["fins"]] <-as.factor(Zoo[["fins"]])
+Zoo[["tail"]] <-as.factor(Zoo[["tail"]])
+Zoo[["domestic"]] <-as.factor(Zoo[["domestic"]])
+Zoo[["catsize"]] <-as.factor(Zoo[["catsize"]])
+Zoo[[ "legs"]] = ifelse(Zoo$legs == 0, "no_legs", "has_legs")
+Zoo[["legs"]] <-as.factor(Zoo[["legs"]])
+str(Zoo)
+```
+
+```{r}
+dim(Zoo)
+Zoo<-as(Zoo, "transactions")
+dim(Zoo)
+summary(Zoo)
+```
+
+```{r}
+itemFrequencyPlot(Zoo, support = 0.1, cex.names=0.8)
+```
+
+Para llevar un recuento más fácil de los items que ya se han hablado, voy a generar un vector ordenado por soporte de los items e iré descartando aquellos que se hayan mencionado ya.
+
+```{r}
+new.items1 <- itemFrequency(Zoo)[order(itemFrequency(Zoo),decreasing = TRUE)]
+new.items1
+```
+
+En el gráfico anterior podemos observar que hay una barra que predomina sobre las demás, es la que representa la cantidad de animales que no son venenosos. Ésto era algo de esperar ya que la mayoría de los animales no lo son, por lo que el dato no nos da mucha información. Lo que sí deberíamos estudiar detenidamente es las cualidades que tienen los animales que sí son venenosos ya que con este dato podríamos descartar muchos sitios.
+
+```{r}
+itemFrequency(Zoo)["venomous=TRUE"]
+
+
+row.names(Zoo.original[which(Zoo.original$venomous==TRUE),])
+
+```
+
+Aquí ya si que podemos sacar algunas conclusiones de la procedencia de los datos. En primer lugar, "pitviper" es un tipo de serpiente venenosa que se encuentra solo en el continente americano, por lo que una de las opciones será América. Por otro lado, vemos que hay una serpiente de mar, que viven mayormente en el Océano Índico, por lo que se contradice un poco con lo anterior. La avispa marina por ejemplo se localiza en la zona de Australia y Filipinas, que no coincide tampoco con ninguna de las zonas que teniamos anteriormente.
+
+Otro aspecto que llama la atención es que haya dos tipos de ranas y  a continuación podemos ver que la diferencia es que una es venenosa y otra no. Las ranas venenosas se encuentran en America central y America del sur.
+
+```{r}
+Zoo.original[grep("frog",row.names(Zoo)),]
+```
+
+```{r}
+#Eliminamos el item venomous=FALSE
+new.items2 <- new.items1[-1] 
+new.items2
+```
+
+
+En los items más frecuentes que nos quedan llama la atencion que otro de los items que m?s frecuencia tiene es el de animales que no son domésticos. Esta información ya si que nos puede dar un dato importante para descartar patrones del sitio que estamos buscando, por ejemplo ya sabemos que no ser una tienda de mascotas ni nada parecido. Vamos a ver qué animales son los que están clasificados como domesticos:
+
+```{r}
+row.names(Zoo.original[which(Zoo.original$domestic == TRUE),])
+```
+
+En esta selección encontramos un animal llamado "girl", este dato es algo raro ya que una niña no puede ser considerada como animal. Además si vemos sus características, podemos ver que no es ningun animal que llamen así, si no que encaja perfectamente con las características de un humano.
+
+Siguiendo por la linea anterior, voy a observar el tipo de animales que hay para seguir afinando acerca del espacio que estamos estudiando. Si vemos los items con menos frecuencia, podemos observar que son los animales de tipo anfibios, reptiles e insectos. De hecho, vamos a observar en un gráfico las frecuencias de cada uno de tipos:
+
+```{r}
+tipos <- c(itemFrequency(Zoo)["type=amphibian"],
+           itemFrequency(Zoo)["type=reptile"],
+           itemFrequency(Zoo)["type=insect"],
+           itemFrequency(Zoo)["type=mollusc.et.al"],
+           itemFrequency(Zoo)["type=fish"],
+           itemFrequency(Zoo)["type=bird"],
+           itemFrequency(Zoo)["type=mammal"])
+
+names(tipos) <- c("amphibian","reptile","insect","mollusc","fish","bird","mammal")
+barplot( tipos,ylab="frequency", xlab="type")
+```
+
+
+Los mamíferos son los que predominan en dicha comunidad de animales, junto con las aves en menor cantidad. La unica conclusión que podr?amos sacar de esto es que no estamo hablando de un acuario ni nada similar ya que los mamíferos y las aves predominan por encima de los peces. Vamos a eliminar estas variables que hemos estudiado para ver que podemos sacar de las que nos quedan.
+
+
+```{r}
+new.items3 <- new.items2[-c(1,21,29,33,34,36,37,38)] 
+new.items3
+```
+
+Ahora, el item con mayor frecuencia es "fins=FALSE", es decir, los animales que no tienen aletas. Esto es algo que no nos sorprende ya que antes hemos visto que los peces no eran los que predominaban en nuestro conjunto. Aun así, si observamos la frecuencia de animales que son peces y que tienen aletas, vemos que no todos los animales que tienen aletas son peces, ya que la frecuencia de los que tienen aletas es mayor que la de los peces. Esta información no nos da nada claro pero podemos ver qué animales son los que no están clasificados como peces pero tienen aletas:
+
+```{r}
+itemFrequency(Zoo)["type=fish"]
+itemFrequency(Zoo)["fins=TRUE"]
+
+row.names(Zoo.original[which(Zoo.original$type != "fish" & Zoo.original$fins==TRUE),])
+
+```
+
+```{r}
+new.items4 <- new.items3[-c(1,28)] 
+new.items4
+```
+
+El siguiente item con más frecuencia es el de los animales que tienen columna vertebral, esta información no parece aportar mucho en el estudio ya que en todos los tipos de animales hay alguno que tiene esqueleto.
+
+```{r}
+new.items5 <- new.items4[-c(1,26)] 
+new.items5
+```
+
+Con respecto a la frecuencia de los animales que tienen plumas lo único que deberíamos comprobar es que coincida con la frecuencia de aves que hay en nuestra base de datos, ya que encontrar un ave sin plumas por ejemplo sería algo raro y un elemento a tener en cuenta para el estudio, al igual que otro tipo de animal que no se considere ave y tenga plumas. 
+
+```{r}
+itemFrequency(Zoo)["type=bird"]
+itemFrequency(Zoo)["feathers=TRUE"]
+```
+
+Como era de esperar, podemos decir que todos los animales que son pajaros tienen plumas y que no hay ningun animal de otro tipo que las tenga. Esta información tampoco nos sirve para determinar qué sitio estamos tratando, por lo que seguimos con el mismo prodecimiento.
+
+```{r}
+new.items6 <- new.items5[-c(1,24)] 
+new.items6
+```
+
+Vamos a estudiar a continuación la proporción de animales que respiran y los que no lo hacen, para ver si encontramos algún patrón raro.
+
+```{r}
+itemFrequency(Zoo)["type=fish"]
+itemFrequency(Zoo)["breathes=FALSE"]
+
+table(Zoo.original[which(Zoo.original$breathes==FALSE),]$type)
+table(Zoo.original[which(Zoo.original$breathes==TRUE),]$type)
+
+row.names(Zoo.original[which(Zoo.original$type == "reptile" & Zoo.original$breathes==FALSE),])
+row.names(Zoo.original[which(Zoo.original$type == "mollusc.et.al" & Zoo.original$breathes==TRUE),])
+
+```
+
+Algo que nos podía llamar la atención de primeras es que haya un reptil que no respira, pero viendo que el animal es la serpiente marina parece darle sentido. Por otro lado, la mayoría de moluscos no respiran pero se han visto 3 animales de dicha clase que si respiran.
+
+Volviendo al tema del "animal" con nombre girl, vamos a ver si hay algun otro caso de animal con nombre raro dentro de la base de datos:
+
+```{r}
+row.names(Zoo.original)
+```
+
+Aparte de la entrada "girl", podemos ver otra entrada llamada "vampire" que tampoco es muy normal. Este dato ya si puede ser decisivo para tomar una decisión final acerca de la procedencia de los datos.
+
+```{r}
+Zoo.original[grep("vampire",row.names(Zoo)),]
+```
+
+#Conclusiones
+
+En un principio, quedó descartada la idea de que fuese un hábitat natural ya que había muchos tipos de animales que viven en condiciones totalmente diferentes. Además, en el estudio se ha visto que hay animales que solo habitan en diferentes partes del mundo, por lo que se afianza más la idea de que no sea un sitio de la tierra en el que los animales vivan sin manipulación humana de instalaciones. Ésto nos puede hacer llegar a la conclusión de que los datos proceden de un Zoológico o algo similar.
+
+Además, también se ha visto que quedan descartados los sitios en los que habitan sobre todo animales domésticos ya que la mayoría de los encontrados en ´sta base de datos no lo son. Además también quedan descartados los acuarios o sitios similares en los que haya solo animales de un tipo ya que la variedad de animales de cada uno de los tipos es bastante grande.
+
+Por último se ha visto que hay dos entradas raras dentro de la base de datos, una niña y un vampiro. Debido a que un vampiro es un ser ficticio y que una niña no puede estar clasificada como animal, ni mucho menos estar en un zoo, llegamos a la conclusión de que es una base de datos ficticia cuyos datos no proceden de ningún lugar concreto. Simplemente se han añadido instancias inventadas de animales con sus correspondientes características para realizar un estudio de las mismas pero no son reales.
+
